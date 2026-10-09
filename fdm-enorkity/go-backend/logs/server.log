@@ -1,0 +1,26 @@
+time=2026-05-09T23:49:43.322+03:00 level=ERROR msg=database err="Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub"
+time=2026-05-09T23:50:40.647+03:00 level=ERROR msg=database err="Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub"
+time=2026-05-09T23:53:13.796+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-09T23:53:31.050+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-09T23:53:31.055+03:00 level=ERROR msg="fiber stopped" err="failed to listen: listen tcp4 127.0.0.1:8765: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted."
+time=2026-05-09T23:54:34.637+03:00 level=INFO msg="shutdown complete"
+time=2026-05-10T00:03:11.134+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-10T15:45:27.317+03:00 level=INFO msg="download started" id=57f55667-1327-4180-a57f-d622f9f031dd url="https://munowatch.com/twolekede?v=wul98KlwYPf4lfwxJ03mpmZXU3R5SXVIMG9jdFhwRWUzWXlpWlE9PQ%253D%253D&title=Incognito"
+time=2026-05-10T15:45:29.245+03:00 level=ERROR msg="download failed" id=57f55667-1327-4180-a57f-d622f9f031dd err="could not allocate unique filename"
+time=2026-05-10T15:58:52.869+03:00 level=INFO msg="shutdown complete"
+time=2026-05-10T15:59:00.029+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-10T23:07:20.385+03:00 level=INFO msg="shutdown complete"
+time=2026-05-10T23:11:14.467+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-11T00:31:24.665+03:00 level=INFO msg="download started" id=60f81bd4-a16b-4d4e-a9b8-4b0e55743602 url="https://munowatch.com/twolekede?v=r4gifc%252FpoN5%252FTb%252FRKPzbTG56TExWVU9vdkFhQ0hPdzZLNmhCTnc9PQ%253D%253D&title=Incognito"
+time=2026-05-11T00:31:26.613+03:00 level=ERROR msg="download failed" id=60f81bd4-a16b-4d4e-a9b8-4b0e55743602 err="could not allocate unique filename"
+time=2026-05-11T01:05:50.089+03:00 level=INFO msg="shutdown complete"
+time=2026-05-11T01:07:09.901+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-11T01:38:57.387+03:00 level=INFO msg="shutdown complete"
+time=2026-05-11T01:39:02.213+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-11T01:50:52.787+03:00 level=INFO msg="download started" id=60f81bd4-a16b-4d4e-a9b8-4b0e55743602 url="https://munowatch.com/twolekede?v=r4gifc%252FpoN5%252FTb%252FRKPzbTG56TExWVU9vdkFhQ0hPdzZLNmhCTnc9PQ%253D%253D&title=Incognito"
+time=2026-05-11T01:50:54.404+03:00 level=INFO msg="download started" id=57f55667-1327-4180-a57f-d622f9f031dd url="https://munowatch.com/twolekede?v=wul98KlwYPf4lfwxJ03mpmZXU3R5SXVIMG9jdFhwRWUzWXlpWlE9PQ%253D%253D&title=Incognito"
+time=2026-05-11T01:50:54.798+03:00 level=ERROR msg="download failed" id=60f81bd4-a16b-4d4e-a9b8-4b0e55743602 err="could not allocate unique filename"
+time=2026-05-11T01:50:56.192+03:00 level=ERROR msg="download failed" id=57f55667-1327-4180-a57f-d622f9f031dd err="could not allocate unique filename"
+time=2026-05-11T13:02:46.882+03:00 level=INFO msg="shutdown complete"
+time=2026-05-11T13:02:49.518+03:00 level=INFO msg=listening addr=127.0.0.1:8765
+time=2026-05-12T10:53:51.884+03:00 level=INFO msg="shutdown complete"

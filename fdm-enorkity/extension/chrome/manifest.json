@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "FDM-Enorkity",
+  "version": "0.1.0",
+  "description": "Send direct download links to your local FDM-Enorkity app (localhost only).",
+  "permissions": ["contextMenus", "storage", "activeTab"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "action": {
+    "default_title": "FDM-Enorkity",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

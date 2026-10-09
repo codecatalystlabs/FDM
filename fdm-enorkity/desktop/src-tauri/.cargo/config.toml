@@ -1,0 +1,3 @@
+[build]
+# Keep compiler memory pressure low on constrained Windows machines.
+jobs = 1

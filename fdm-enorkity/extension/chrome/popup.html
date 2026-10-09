@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FDM-Enorkity</title>
+    <style>
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        color: #555;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+      }
+      button {
+        margin-top: 10px;
+        width: 100%;
+        padding: 10px;
+        border: 0;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #6366f1, #22d3ee);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .muted {
+        color: #666;
+        font-size: 12px;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        word-break: break-all;
+      }
+      .err {
+        color: #b91c1c;
+        margin-top: 8px;
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .toggle-row input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="font-weight: 700">FDM-Enorkity</div>
+    <div class="muted" style="margin-top: 6px">Local pairing + send direct URLs only.</div>
+    <div class="muted" style="margin-top: 6px">
+      If buttons seem dead: right-click this popup → Inspect → Console.
+    </div>
+
+    <label>API base</label>
+    <input id="apiBase" />
+
+    <label>Pairing token</label>
+    <input id="token" />
+
+    <div class="toggle-row">
+      <input id="autoCaptureDirectLinks" type="checkbox" />
+      <label for="autoCaptureDirectLinks" style="margin: 0; font-size: 12px">
+        Auto-capture direct / playlist / video URLs
+      </label>
+    </div>
+    <div class="muted" style="margin-top: 4px">
+      Off by default. Sends clicked http(s) links that look like files or HLS (.m3u8) / DASH (.mpd), and
+      http(s) URLs on a &lt;video&gt; when the page exposes them. Many streaming sites use blob / DRM only — use
+      right-click on the player → “Download … (video/audio URL)” when Chrome offers a srcUrl.
+    </div>
+
+    <div class="toggle-row">
+      <input id="videoPlayPrompt" type="checkbox" />
+      <label for="videoPlayPrompt" style="margin: 0; font-size: 12px">
+        Ask when a video plays (https URL only)
+      </label>
+    </div>
+    <div class="muted" style="margin-top: 4px">
+      Shows a small corner prompt on <code>play</code> if the &lt;video&gt; has a real https link. In-browser
+      <code>blob:</code> streams cannot be saved as one file from the extension.
+    </div>
+
+    <button type="button" id="save">Save</button>
+    <button type="button" id="pair" style="margin-top: 8px; background: #111827">Register / refresh pairing</button>
+
+    <div style="margin-top: 12px" class="muted">Status</div>
+    <div id="status" class="mono"></div>
+
+    <div style="margin-top: 12px" class="muted">Last sent</div>
+    <div id="last" class="mono"></div>
+
+    <div id="err" class="err"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

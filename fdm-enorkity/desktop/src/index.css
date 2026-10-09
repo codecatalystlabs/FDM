@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+  --card: 222 40% 10%;
+  --muted: 215 20% 65%;
+  --accent: 188 94% 43%;
+  --primary: 263 90% 66%;
+  --border: 217 19% 20%;
+  --ring: 188 94% 43%;
+}
+
+html.light {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --muted: 215 16% 40%;
+  --accent: 188 70% 38%;
+  --primary: 263 70% 50%;
+  --border: 214 32% 91%;
+  --ring: 188 70% 38%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}

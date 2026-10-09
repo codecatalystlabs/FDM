@@ -1,0 +1,3 @@
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
+cargo --version
+npm run tauri:build:offline-webview
