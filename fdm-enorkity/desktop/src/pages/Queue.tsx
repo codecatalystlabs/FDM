@@ -1,82 +1,92 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Pause, Play } from "lucide-react";
+import { ChevronDown, ChevronUp, ListOrdered, Pause, Play } from "lucide-react";
 import { api } from "@/lib/api";
-import { Button, Card } from "@/components/ui";
+import { displayTitle, formatBytes } from "@/lib/format";
+import { useSettings } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
+import { Page } from "@/components/Layout";
+import { DownloadBadges, DownloadThumb } from "@/components/media";
+import { statusLine } from "@/components/DownloadCards";
+import { Badge, Button, EmptyState, IconButton, Panel } from "@/components/ui";
+
+const LIVE = new Set(["active", "queued", "pending", "paused"]);
 
 export default function QueuePage() {
   const qc = useQueryClient();
+  const settings = useSettings();
   const q = useQuery({ queryKey: ["queue"], queryFn: api.queue, refetchInterval: 1500 });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["queue"] });
+    void qc.invalidateQueries({ queryKey: ["downloads"] });
+  };
+  const startAll = useMutation({ mutationFn: api.queueStartAll, onSettled: refresh });
+  const pauseAll = useMutation({ mutationFn: api.queuePauseAll, onSettled: refresh });
+  const up = useMutation({ mutationFn: api.queueMoveUp, onSettled: refresh });
+  const down = useMutation({ mutationFn: api.queueMoveDown, onSettled: refresh });
 
-  const startAll = useMutation({
-    mutationFn: api.queueStartAll,
-    onSuccess: () => qc.invalidateQueries(),
-  });
-  const pauseAll = useMutation({
-    mutationFn: api.queuePauseAll,
-    onSuccess: () => qc.invalidateQueries(),
-  });
-  const up = useMutation({
-    mutationFn: api.queueMoveUp,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
-  });
-  const down = useMutation({
-    mutationFn: api.queueMoveDown,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["queue"] }),
-  });
-
-  const items = q.data ?? [];
+  const items = (q.data ?? []).filter((qi) => qi.download && LIVE.has(qi.download.status));
+  const slots = settings.data?.max_concurrent_downloads ?? 3;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Queue</h1>
-          <p className="mt-1 text-sm text-muted">Ordering and bulk controls (MVP).</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => startAll.mutate()}>
-            <Play className="mr-2 h-4 w-4" />
-            Start all
-          </Button>
-          <Button variant="outline" onClick={() => pauseAll.mutate()}>
-            <Pause className="mr-2 h-4 w-4" />
-            Pause all
-          </Button>
-        </div>
-      </div>
-
-      <Card className="overflow-hidden p-0">
-        <div className="grid grid-cols-12 gap-2 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase text-muted html.light:border-slate-200">
-          <div className="col-span-5">Download</div>
-          <div className="col-span-2">Priority</div>
-          <div className="col-span-2">Position</div>
-          <div className="col-span-3 text-right">Actions</div>
-        </div>
-        <div className="divide-y divide-white/10 html.light:divide-slate-200">
-          {items.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted">Queue is empty.</div>
-          ) : (
-            items.map((qi) => (
-              <div key={qi.id} className="grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm">
-                <div className="col-span-5 min-w-0">
-                  <div className="truncate font-medium">{qi.download?.filename ?? qi.download_id}</div>
-                  <div className="truncate text-xs text-muted">{qi.download?.url}</div>
+    <Page
+      title="Queue"
+      subtitle={`Downloads run ${slots} at a time, top to bottom. Change it in Settings.`}
+      actions={
+        items.length ? (
+          <>
+            <Button onClick={() => startAll.mutate()}>
+              <Play className="h-3.5 w-3.5" fill="currentColor" />
+              Start all
+            </Button>
+            <Button onClick={() => pauseAll.mutate()}>
+              <Pause className="h-3.5 w-3.5" fill="currentColor" />
+              Pause all
+            </Button>
+          </>
+        ) : null
+      }
+    >
+      {items.length === 0 ? (
+        <EmptyState icon={<ListOrdered />} title="The queue is empty">
+          When you add more downloads than can run at once, they wait here in order.
+        </EmptyState>
+      ) : (
+        <Panel className="divide-y divide-line overflow-hidden">
+          {items.map((qi, i) => {
+            const d = qi.download!;
+            return (
+              <div key={qi.id} className="flex items-center gap-3 px-3 py-2.5 animate-fade-up">
+                <span className="num w-6 text-center text-[13px] font-semibold text-ink-3">{i + 1}</span>
+                <DownloadThumb d={d} className="w-[88px]" rounded="rounded-lg" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-semibold">{displayTitle(d)}</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink-3">
+                    <DownloadBadges d={d} />
+                    <span
+                      className={cn(
+                        d.status === "active" && "font-medium text-accent-ink dark:text-accent",
+                        d.status === "paused" && "text-warn",
+                      )}
+                    >
+                      {statusLine(d)}
+                    </span>
+                    {d.file_size > 0 ? <span className="num">· {formatBytes(d.file_size)}</span> : null}
+                  </div>
                 </div>
-                <div className="col-span-2 font-mono text-xs">{qi.priority}</div>
-                <div className="col-span-2 font-mono text-xs">{qi.position}</div>
-                <div className="col-span-3 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => up.mutate(qi.id)} title="Move up">
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" onClick={() => down.mutate(qi.id)} title="Move down">
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
+                {qi.priority > 0 ? <Badge tone="accent">Priority {qi.priority}</Badge> : null}
+                <div className="flex gap-1">
+                  <IconButton size="sm" label="Move up" disabled={i === 0} onClick={() => up.mutate(qi.id)}>
+                    <ChevronUp />
+                  </IconButton>
+                  <IconButton size="sm" label="Move down" disabled={i === items.length - 1} onClick={() => down.mutate(qi.id)}>
+                    <ChevronDown />
+                  </IconButton>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </Card>
-    </div>
+            );
+          })}
+        </Panel>
+      )}
+    </Page>
   );
 }

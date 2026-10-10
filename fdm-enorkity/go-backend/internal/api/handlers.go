@@ -1,12 +1,14 @@
 package api
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
 	"fdm-enorkity/internal/browser"
 	"fdm-enorkity/internal/config"
 	"fdm-enorkity/internal/downloads"
+	"fdm-enorkity/internal/files"
 	"fdm-enorkity/internal/models"
 	"fdm-enorkity/internal/settings"
 
@@ -26,7 +28,7 @@ func Register(app *fiber.App, d Deps) {
 	v1 := app.Group("/api/v1")
 
 	v1.Get("/health", func(c *fiber.Ctx) error {
-		return OK(c, "ok", fiber.Map{"service": "fdm-enorkity-backend"})
+		return OK(c, "ok", fiber.Map{"service": "catalystfdm-engine"})
 	})
 
 	v1.Get("/downloads", func(c *fiber.Ctx) error {
@@ -41,6 +43,24 @@ func Register(app *fiber.App, d Deps) {
 		return OK(c, "ok", fiber.Map{"items": items, "total": total})
 	})
 
+	v1.Get("/media/status", func(c *fiber.Ctx) error {
+		st := d.Manager.Media.Status(c.Context())
+		st.CookiesBrowser = d.Settings.MediaCookiesBrowser()
+		return OK(c, "ok", st)
+	})
+
+	v1.Post("/media/update", func(c *fiber.Ctx) error {
+		res, err := d.Manager.Media.Update(c.Context())
+		if err != nil {
+			return Fail(c, fiber.StatusBadGateway, "update failed", err.Error())
+		}
+		return OK(c, "ok", res)
+	})
+
+	v1.Post("/inspect", func(c *fiber.Ctx) error {
+		return inspect(c, d)
+	})
+
 	v1.Post("/downloads", func(c *fiber.Ctx) error {
 		var body struct {
 			URL           string `json:"url"`
@@ -49,21 +69,24 @@ func Register(app *fiber.App, d Deps) {
 			Source        string `json:"source"`
 			Category      string `json:"category"`
 			ExecConfirmed bool   `json:"exec_confirmed"`
+			mediaFields
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return Fail(c, fiber.StatusBadRequest, "invalid body", err.Error())
 		}
-		dl, err := d.Manager.AddDownload(downloads.AddDownloadInput{
+		in := downloads.AddDownloadInput{
 			URL: body.URL, Filename: body.Filename, Referrer: body.Referrer,
 			Source: body.Source, Category: body.Category, ExecConfirmed: body.ExecConfirmed,
-		})
+		}
+		body.mediaFields.apply(&in)
+		dl, err := d.Manager.AddDownload(in)
 		if err != nil {
 			return Fail(c, fiber.StatusBadRequest, "add failed", err.Error())
 		}
-		if !(dl.RequiresExecConfirm && !dl.ExecConfirmed) {
-			_ = d.Manager.StartDownload(dl.ID)
+		if dl.Skipped {
+			return OK(c, "already downloaded", dl)
 		}
-		return OK(c, "Download added successfully", dl)
+		return OK(c, "Download added successfully", startOrSchedule(d, dl, body.When))
 	})
 
 	v1.Get("/downloads/:id", func(c *fiber.Ctx) error {
@@ -72,6 +95,77 @@ func Register(app *fiber.App, d Deps) {
 			return Fail(c, fiber.StatusNotFound, "not found", err.Error())
 		}
 		return OK(c, "ok", dl)
+	})
+
+	// Open, Show in folder and in-app playback for finished downloads (internal/files/open.go).
+	finished := func(c *fiber.Ctx) (*models.Download, error) {
+		dl, err := d.Manager.GetDownload(c.Params("id"))
+		if err != nil {
+			return nil, Fail(c, fiber.StatusNotFound, "not found", err.Error())
+		}
+		if dl.Status != models.DownloadCompleted || dl.FilePath == "" {
+			return nil, Fail(c, fiber.StatusConflict, "not finished", "this download hasn't finished yet")
+		}
+		return dl, nil
+	}
+
+	v1.Post("/downloads/:id/open", func(c *fiber.Ctx) error {
+		dl, ferr := finished(c)
+		if dl == nil {
+			return ferr
+		}
+		if err := files.OpenWithDefaultApp(dl.FilePath); err != nil {
+			return Fail(c, fiber.StatusBadRequest, "open failed", err.Error())
+		}
+		return OK(c, "opened", fiber.Map{"id": dl.ID})
+	})
+
+	v1.Post("/downloads/:id/reveal", func(c *fiber.Ctx) error {
+		dl, ferr := finished(c)
+		if dl == nil {
+			return ferr
+		}
+		if err := files.Reveal(dl.FilePath); err != nil {
+			return Fail(c, fiber.StatusBadRequest, "reveal failed", err.Error())
+		}
+		return OK(c, "revealed", fiber.Map{"id": dl.ID})
+	})
+
+	v1.Get("/downloads/:id/stream", func(c *fiber.Ctx) error {
+		dl, ferr := finished(c)
+		if dl == nil {
+			return ferr
+		}
+		switch dl.Category {
+		case "video", "audio", "images":
+		default:
+			return Fail(c, fiber.StatusUnsupportedMediaType, "not playable", "only video, audio and images can be previewed")
+		}
+		if _, err := os.Stat(dl.FilePath); err != nil {
+			return Fail(c, fiber.StatusNotFound, "missing", "the file is no longer on disk")
+		}
+		c.Set(fiber.HeaderContentDisposition, "inline")
+		c.Set("Cache-Control", "private, max-age=0")
+		return c.SendFile(dl.FilePath)
+	})
+
+	v1.Get("/downloads/:id/poster", func(c *fiber.Ctx) error {
+		dl, ferr := finished(c)
+		if dl == nil {
+			return ferr
+		}
+		if dl.Category != "video" {
+			return Fail(c, fiber.StatusUnsupportedMediaType, "no poster", "posters are made for videos only")
+		}
+		path, dur, err := d.Manager.Media.Poster(c.Context(), dl.ID, dl.FilePath)
+		if err != nil {
+			return Fail(c, fiber.StatusNotFound, "no poster", err.Error())
+		}
+		if dur > 0 && dl.DurationSeconds == 0 {
+			_ = d.DB.Model(&models.Download{}).Where("id = ?", dl.ID).Update("duration_seconds", dur).Error
+		}
+		c.Set("Cache-Control", "private, max-age=86400")
+		return c.SendFile(path)
 	})
 
 	v1.Post("/downloads/:id/confirm-executable", func(c *fiber.Ctx) error {
@@ -87,6 +181,21 @@ func Register(app *fiber.App, d Deps) {
 			return Fail(c, fiber.StatusBadRequest, "start failed", err.Error())
 		}
 		return OK(c, "started", fiber.Map{"id": c.Params("id")})
+	})
+
+	v1.Post("/downloads/:id/start-now", func(c *fiber.Ctx) error {
+		if err := d.Manager.StartNow(c.Params("id")); err != nil {
+			return Fail(c, fiber.StatusBadRequest, "start failed", err.Error())
+		}
+		return OK(c, "started", fiber.Map{"id": c.Params("id")})
+	})
+
+	v1.Post("/downloads/:id/tonight", func(c *fiber.Ctx) error {
+		dl, err := d.Manager.ScheduleNight(c.Params("id"))
+		if err != nil {
+			return Fail(c, fiber.StatusBadRequest, "schedule failed", err.Error())
+		}
+		return OK(c, "scheduled for night data", dl)
 	})
 
 	v1.Post("/downloads/:id/pause", func(c *fiber.Ctx) error {
@@ -249,11 +358,12 @@ func Register(app *fiber.App, d Deps) {
 
 	// Do not use v1.Group("/browser", PairingGuard): Fiber can apply group middleware to other
 	// /browser/* routes (e.g. GET /browser/status), causing 401 for the extension popup.
-	pairGuard := PairingGuard(d.Settings)
+	pairGuard := PairingGuard(d.Browser)
 
 	v1.Get("/browser/status", func(c *fiber.Ctx) error {
 		return OK(c, "ok", fiber.Map{
 			"pairing_configured": d.Settings.PairingTokenHash() != "",
+			"one_click_pairing":  true,
 		})
 	})
 
@@ -272,6 +382,66 @@ func Register(app *fiber.App, d Deps) {
 		return OK(c, "revoked", fiber.Map{"id": c.Params("id")})
 	})
 
+	// One-click pairing (internal/browser/pairing.go). The extension asks, the app allows.
+	v1.Post("/browser/pair/request", func(c *fiber.Ctx) error {
+		var body struct {
+			BrowserName string `json:"browser_name"`
+			ExtensionID string `json:"extension_id"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return Fail(c, fiber.StatusBadRequest, "invalid body", err.Error())
+		}
+		ticket, err := d.Browser.RequestPair(body.BrowserName, body.ExtensionID)
+		if err != nil {
+			return Fail(c, fiber.StatusBadRequest, "pair request failed", err.Error())
+		}
+		return OK(c, "approve this browser in CatalystFDM", ticket)
+	})
+
+	v1.Get("/browser/pair/request/:secret", func(c *fiber.Ctx) error {
+		return OK(c, "ok", d.Browser.ClaimPair(c.Params("secret")))
+	})
+
+	// Approving is the app's job: an extension may not approve its own request.
+	appOnly := func(c *fiber.Ctx) error {
+		if isExtensionOrigin(c.Get(fiber.HeaderOrigin)) {
+			return Fail(c, fiber.StatusForbidden, "Forbidden", "only the CatalystFDM app can approve browsers")
+		}
+		return c.Next()
+	}
+
+	v1.Get("/browser/pair/pending", func(c *fiber.Ctx) error {
+		return OK(c, "ok", d.Browser.PendingRequests())
+	})
+
+	v1.Post("/browser/pair/pending/:id/approve", appOnly, func(c *fiber.Ctx) error {
+		conn, err := d.Browser.ApprovePair(c.Params("id"))
+		if err != nil {
+			return Fail(c, fiber.StatusBadRequest, "approve failed", err.Error())
+		}
+		return OK(c, "connected", conn)
+	})
+
+	v1.Post("/browser/pair/pending/:id/deny", appOnly, func(c *fiber.Ctx) error {
+		if err := d.Browser.DenyPair(c.Params("id")); err != nil {
+			return Fail(c, fiber.StatusBadRequest, "deny failed", err.Error())
+		}
+		return OK(c, "denied", fiber.Map{"id": c.Params("id")})
+	})
+
+	v1.Get("/browser/me", pairGuard, func(c *fiber.Ctx) error {
+		extID := c.Get("X-FDM-Extension-Id")
+		if extID != "" {
+			d.Browser.Touch(extID)
+		}
+		conn, err := d.Browser.ConnectionForToken(c.Get("X-FDM-Pairing-Token"), extID)
+		if err != nil {
+			return OK(c, "ok", fiber.Map{"paired": true})
+		}
+		return OK(c, "ok", fiber.Map{"paired": true, "connection": conn})
+	})
+
+	// Legacy manual-token flow: Settings → generate token → paste into the extension → register.
 	v1.Post("/browser/pair", pairGuard, func(c *fiber.Ctx) error {
 		var body struct {
 			BrowserName string `json:"browser_name"`
@@ -283,11 +453,18 @@ func Register(app *fiber.App, d Deps) {
 		if strings.TrimSpace(body.ExtensionID) == "" {
 			return Fail(c, fiber.StatusBadRequest, "invalid body", "extension_id required")
 		}
-		conn, err := d.Browser.Pair(strings.TrimSpace(body.BrowserName), strings.TrimSpace(body.ExtensionID))
+		conn, err := d.Browser.Pair(strings.TrimSpace(body.BrowserName), strings.TrimSpace(body.ExtensionID), c.Get("X-FDM-Pairing-Token"))
 		if err != nil {
 			return Fail(c, fiber.StatusBadRequest, "pair failed", err.Error())
 		}
 		return OK(c, "paired", conn)
+	})
+
+	v1.Post("/browser/inspect", pairGuard, func(c *fiber.Ctx) error {
+		if extID := c.Get("X-FDM-Extension-Id"); extID != "" {
+			d.Browser.Touch(extID)
+		}
+		return inspect(c, d)
 	})
 
 	v1.Post("/browser/add-download", pairGuard, func(c *fiber.Ctx) error {
@@ -296,6 +473,7 @@ func Register(app *fiber.App, d Deps) {
 			Referrer  string `json:"referrer"`
 			Filename  string `json:"filename"`
 			PageTitle string `json:"page_title"`
+			mediaFields
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return Fail(c, fiber.StatusBadRequest, "invalid body", err.Error())
@@ -304,17 +482,19 @@ func Register(app *fiber.App, d Deps) {
 		if extID != "" {
 			d.Browser.Touch(extID)
 		}
-		dl, err := d.Manager.AddDownload(downloads.AddDownloadInput{
+		in := downloads.AddDownloadInput{
 			URL: body.URL, Filename: body.Filename, PageTitle: body.PageTitle,
 			Referrer: body.Referrer, Source: "browser", ExecConfirmed: false,
-		})
+		}
+		body.mediaFields.apply(&in)
+		dl, err := d.Manager.AddDownload(in)
 		if err != nil {
 			return Fail(c, fiber.StatusBadRequest, "add failed", err.Error())
 		}
-		if !(dl.RequiresExecConfirm && !dl.ExecConfirmed) {
-			_ = d.Manager.StartDownload(dl.ID)
+		if dl.Skipped {
+			return OK(c, "already downloaded", dl)
 		}
-		return OK(c, "download added", dl)
+		return OK(c, "download added", startOrSchedule(d, dl, body.When))
 	})
 
 	v1.Get("/logs", func(c *fiber.Ctx) error {
@@ -361,6 +541,7 @@ func Register(app *fiber.App, d Deps) {
 			Row()
 		_ = row.Scan(&totalBytes)
 		out["total_bytes_completed"] = totalBytes
+		out["recent_speed_bps"] = recentSpeed(d.DB)
 		return OK(c, "ok", out)
 	})
 
@@ -381,4 +562,43 @@ func Register(app *fiber.App, d Deps) {
 			Scan(&rows).Error
 		return OK(c, "ok", rows)
 	})
+}
+
+// recentSpeed is the average throughput of the last 20 finished downloads, so the app can say
+// how long each quality will take on this connection. 0 when there's no history yet.
+func recentSpeed(db *gorm.DB) int64 {
+	var rows []models.Download
+	if err := db.Where("status = ? AND started_at IS NOT NULL AND completed_at IS NOT NULL AND downloaded_bytes > ?",
+		models.DownloadCompleted, 1<<20).Order("completed_at DESC").Limit(20).Find(&rows).Error; err != nil {
+		return 0
+	}
+	var bytes int64
+	var secs float64
+	for _, r := range rows {
+		d := r.CompletedAt.Sub(*r.StartedAt).Seconds()
+		if d < 1 || d > 6*3600 {
+			continue
+		}
+		bytes += r.DownloadedBytes
+		secs += d
+	}
+	if secs == 0 {
+		return 0
+	}
+	return int64(float64(bytes) / secs)
+}
+
+// startOrSchedule starts a new download now, or for when = "night" waits for the night data
+// window. Executables wait for the user's OK either way.
+func startOrSchedule(d Deps, dl *models.Download, when string) *models.Download {
+	if dl.RequiresExecConfirm && !dl.ExecConfirmed {
+		return dl
+	}
+	if strings.EqualFold(strings.TrimSpace(when), "night") {
+		if got, err := d.Manager.ScheduleNight(dl.ID); err == nil {
+			return got
+		}
+	}
+	_ = d.Manager.StartDownload(dl.ID)
+	return dl
 }

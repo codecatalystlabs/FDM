@@ -1,112 +1,478 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FDM-Enorkity</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>CatalystFDM</title>
+    <link rel="stylesheet" href="ui.css" />
     <style>
       body {
-        width: 320px;
-        margin: 0;
-        padding: 12px;
-        font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        width: 360px;
+        min-height: 200px;
       }
-      label {
-        display: block;
-        margin-top: 10px;
-        font-size: 11px;
-        color: #555;
-      }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 8px;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-      }
-      button {
-        margin-top: 10px;
-        width: 100%;
-        padding: 10px;
-        border: 0;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #6366f1, #22d3ee);
-        color: white;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .muted {
-        color: #666;
-        font-size: 12px;
-      }
-      .mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 11px;
-        word-break: break-all;
-      }
-      .err {
-        color: #b91c1c;
-        margin-top: 8px;
-      }
-      .toggle-row {
+
+      .hero {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-top: 12px;
+        gap: 11px;
+        padding: 14px 16px;
+        background: var(--hero);
+        color: #fff;
+        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
       }
-      .toggle-row input[type="checkbox"] {
-        width: auto;
-        margin: 0;
+
+      .hero img {
+        display: block;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+      }
+
+      .hero-title {
+        font: 600 15px/1.2 var(--font-display);
+        letter-spacing: -0.015em;
+      }
+
+      .hero-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.78);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .hero-status #statusText {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      main {
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+      }
+
+      .view {
+        display: grid;
+        gap: 12px;
+      }
+
+      .center {
+        text-align: center;
+        justify-items: center;
+      }
+
+      #v-loading {
+        padding: 26px 0 18px;
+        color: var(--text-2);
+      }
+
+      .intro {
+        display: grid;
+        justify-items: center;
+        gap: 6px;
+        padding: 8px 4px 4px;
+        text-align: center;
+      }
+
+      .intro img {
+        margin-bottom: 6px;
+        border-radius: 13px;
+        box-shadow: 0 6px 18px rgba(0, 49, 107, 0.25);
+      }
+
+      .intro h2,
+      .phase h2 {
+        font: 700 17px/1.25 var(--font-display);
+        letter-spacing: -0.02em;
+      }
+
+      .intro p,
+      .phase p {
+        color: var(--text-2);
+        font-size: 12.5px;
+      }
+
+      .phase {
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+        padding: 10px 2px 2px;
+        text-align: center;
+      }
+
+      .eyebrow {
+        color: var(--text-2);
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .instruction {
+        margin-top: 4px;
+        font-size: 14px;
+        color: var(--text) !important;
+      }
+
+      .code {
+        --tile-w: 54px;
+        --tile-h: 64px;
+        --tile-font: 32px;
+        --tile-gap: 9px;
+        margin: 4px 0;
+      }
+
+      .phase .btn-lg {
+        margin-top: 4px;
+        min-width: 140px;
+      }
+
+      .cancel-row {
+        display: flex;
+        justify-content: center;
+      }
+
+      .tab-info {
+        margin: -4px 0 0;
+        color: var(--text-2);
+        font-size: 12px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .result .msg strong {
+        display: block;
+        font-weight: 600;
+      }
+
+      .result .msg span {
+        color: var(--text-2);
+      }
+
+      .playlist {
+        display: grid;
+        gap: 9px;
+        padding: 12px;
+      }
+
+      .pl-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .pl-head strong {
+        flex: 1;
+        min-width: 0;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .pl-head span {
+        color: var(--text-2);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .chip {
+        appearance: none;
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+        font: 600 12px/1 var(--font);
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+      }
+
+      .chip:hover {
+        border-color: var(--primary);
+      }
+
+      .chip:active {
+        transform: scale(0.96);
+      }
+
+      .chip.rec {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .chip[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .chip .spin {
+        width: 12px;
+        height: 12px;
+      }
+
+      .advanced-body {
+        display: grid;
+        gap: 8px;
+        padding-top: 4px;
+      }
+
+      .row.col {
+        display: block;
+      }
+
+      .inline {
+        display: flex;
+        gap: 6px;
+      }
+
+      .inline .field {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .adv-msg {
+        min-height: 0;
+        font-size: 12px;
+        color: var(--text-2);
+        padding: 0 2px;
+        overflow-wrap: anywhere;
+      }
+
+      .adv-msg:empty {
+        display: none;
+      }
+
+      .adv-msg.bad {
+        color: var(--danger);
+      }
+
+      .adv-msg.good {
+        color: var(--success);
+      }
+
+      .meta {
+        display: flex;
+        gap: 6px;
+        padding: 0 2px;
+        color: var(--text-3);
+        font-size: 11px;
+        min-width: 0;
+      }
+
+      .meta .mono {
+        font-family: var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+      }
+
+      button.row.btn-danger {
+        color: var(--danger);
+        font-weight: 500;
       }
     </style>
   </head>
   <body>
-    <div style="font-weight: 700">FDM-Enorkity</div>
-    <div class="muted" style="margin-top: 6px">Local pairing + send direct URLs only.</div>
-    <div class="muted" style="margin-top: 6px">
-      If buttons seem dead: right-click this popup → Inspect → Console.
-    </div>
+    <header class="hero">
+      <img src="icons/mark-reverse.svg" width="30" height="30" alt="" />
+      <div style="min-width: 0; flex: 1">
+        <div class="hero-title">CatalystFDM</div>
+        <div class="hero-status" role="status">
+          <span id="dot" class="dot" aria-hidden="true"></span><span id="statusText">Checking…</span>
+        </div>
+      </div>
+    </header>
 
-    <label>API base</label>
-    <input id="apiBase" />
+    <main>
+      <!-- Checking -->
+      <section id="v-loading" class="view center">
+        <span class="spin" aria-hidden="true"></span>
+        <span class="sr-only">Checking connection…</span>
+      </section>
 
-    <label>Pairing token</label>
-    <input id="token" />
+      <!-- Not connected -->
+      <section id="v-connect" class="view" hidden>
+        <div id="revokedNote" class="notice warn" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <span class="msg">This browser was disconnected in CatalystFDM. Connect again to keep downloading.</span>
+        </div>
+        <div id="storageNote" class="notice danger" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <span class="msg" id="storageText"></span>
+        </div>
+        <div class="intro">
+          <img src="icons/app-icon.svg" width="56" height="56" alt="" />
+          <h2>Connect your browser</h2>
+          <p>One click here, then <strong>Allow</strong> in CatalystFDM.</p>
+        </div>
+        <button type="button" id="connectBtn" class="btn btn-primary btn-lg btn-block">Connect to CatalystFDM</button>
+      </section>
 
-    <div class="toggle-row">
-      <input id="autoCaptureDirectLinks" type="checkbox" />
-      <label for="autoCaptureDirectLinks" style="margin: 0; font-size: 12px">
-        Auto-capture direct / playlist / video URLs
-      </label>
-    </div>
-    <div class="muted" style="margin-top: 4px">
-      Off by default. Sends clicked http(s) links that look like files or HLS (.m3u8) / DASH (.mpd), and
-      http(s) URLs on a &lt;video&gt; when the page exposes them. Many streaming sites use blob / DRM only — use
-      right-click on the player → “Download … (video/audio URL)” when Chrome offers a srcUrl.
-    </div>
+      <!-- Connecting -->
+      <section id="v-pair" class="view" hidden aria-live="polite">
+        <div class="phase" data-phase="checking">
+          <span class="spin" aria-hidden="true"></span>
+          <p>Looking for CatalystFDM…</p>
+        </div>
 
-    <div class="toggle-row">
-      <input id="videoPlayPrompt" type="checkbox" />
-      <label for="videoPlayPrompt" style="margin: 0; font-size: 12px">
-        Ask when a video plays (https URL only)
-      </label>
-    </div>
-    <div class="muted" style="margin-top: 4px">
-      Shows a small corner prompt on <code>play</code> if the &lt;video&gt; has a real https link. In-browser
-      <code>blob:</code> streams cannot be saved as one file from the extension.
-    </div>
+        <div class="phase" data-phase="code" hidden>
+          <p class="eyebrow">Your code</p>
+          <div id="tiles" class="code" role="img" aria-label="Connection code"></div>
+          <p class="instruction">Click <strong>Allow</strong> in CatalystFDM</p>
+          <div class="waiting"><span class="pulse" aria-hidden="true"></span><span id="waitText">Waiting for approval…</span></div>
+        </div>
 
-    <button type="button" id="save">Save</button>
-    <button type="button" id="pair" style="margin-top: 8px; background: #111827">Register / refresh pairing</button>
+        <div class="phase" data-phase="offline" hidden>
+          <div class="status-icon warn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+          </div>
+          <h2>Open CatalystFDM first</h2>
+          <p>It needs to be running on this computer. We'll connect as soon as it is.</p>
+          <button type="button" class="btn btn-primary btn-lg" data-action="retry">Retry</button>
+          <p id="retryText" class="eyebrow"></p>
+        </div>
 
-    <div style="margin-top: 12px" class="muted">Status</div>
-    <div id="status" class="mono"></div>
+        <div class="phase" data-phase="connected" hidden>
+          <div class="status-icon ok">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="draw" d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <h2>Connected</h2>
+          <p>You're all set.</p>
+        </div>
 
-    <div style="margin-top: 12px" class="muted">Last sent</div>
-    <div id="last" class="mono"></div>
+        <div class="phase" data-phase="denied" hidden>
+          <div class="status-icon danger">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+          </div>
+          <h2>Connection declined</h2>
+          <p>Someone clicked Don't Allow in CatalystFDM.</p>
+          <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+        </div>
 
-    <div id="err" class="err"></div>
+        <div class="phase" data-phase="expired" hidden>
+          <div class="status-icon warn">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h2>That code expired</h2>
+          <p>Codes last five minutes. Get a fresh one.</p>
+          <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+        </div>
 
+        <div class="phase" data-phase="error" hidden>
+          <div class="status-icon danger">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          </div>
+          <h2>Couldn't connect</h2>
+          <p id="pairError"></p>
+          <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+        </div>
+
+        <div class="cancel-row">
+          <button type="button" id="cancelPair" class="btn btn-link">Cancel</button>
+        </div>
+      </section>
+
+      <!-- Connected -->
+      <section id="v-main" class="view" hidden>
+        <div id="offlineNote" class="notice warn" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+          <span class="msg">CatalystFDM isn't running. Open the app to download.</span>
+        </div>
+        <div id="errNote" class="notice danger" hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <span class="msg" id="errText"></span>
+          <button type="button" class="x" id="errDismiss" title="Dismiss" aria-label="Dismiss">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+
+        <button type="button" id="dlBtn" class="btn btn-primary btn-lg btn-block">
+          <span id="dlIcon" class="dl-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span>
+          <span id="dlSpin" class="spin" aria-hidden="true" hidden></span>
+          <span id="dlLabel">Download video on this tab</span>
+        </button>
+        <p id="tabInfo" class="tab-info"></p>
+
+        <div id="result" class="notice result" role="status" hidden>
+          <svg id="resOk" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          <svg id="resErr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <span class="msg"><strong id="resTitle"></strong><span id="resDetail"></span></span>
+        </div>
+
+        <div id="playlist" class="group playlist" hidden>
+          <div class="pl-head"><strong id="plTitle"></strong><span id="plCount"></span></div>
+          <div id="plChips" class="chips" role="group" aria-label="Quality for every video"></div>
+        </div>
+
+        <div class="group">
+          <label class="row">
+            <span class="ico" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span>
+            <span class="label">Show download button on videos</span>
+            <span class="switch"><input id="videoPlayPrompt" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span></span>
+          </label>
+          <a class="row" id="openApp" href="http://127.0.0.1:5173/" target="_blank" rel="noopener noreferrer">
+            <span class="ico navy" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></span>
+            <span class="label">Open CatalystFDM</span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+      </section>
+
+      <!-- Advanced (all states) -->
+      <details id="advanced" class="advanced">
+        <summary>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          Advanced
+        </summary>
+        <div class="advanced-body">
+          <div class="group">
+            <div class="row plain col">
+              <label class="field-label" for="apiBase">App address</label>
+              <input id="apiBase" class="field" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:8765" />
+            </div>
+            <div class="row plain col">
+              <label class="field-label" for="token">Connect with a token</label>
+              <div class="inline">
+                <input id="token" class="field" type="password" spellcheck="false" autocomplete="off" placeholder="Paste the token from CatalystFDM" />
+                <button type="button" id="useToken" class="btn btn-sm">Connect</button>
+              </div>
+            </div>
+            <label class="row plain">
+              <span class="label">Send clicked file links automatically<small>Archives, installers, media files, .m3u8 and .mpd links</small></span>
+              <span class="switch"><input id="autoCaptureDirectLinks" type="checkbox" role="switch" /><span class="track" aria-hidden="true"></span></span>
+            </label>
+            <div id="hiddenRow" class="row plain" hidden>
+              <span class="label" id="hiddenText"></span>
+              <button type="button" id="resetHidden" class="btn btn-sm">Show again</button>
+            </div>
+            <button type="button" id="disconnectBtn" class="row plain btn-danger" hidden>Disconnect this browser</button>
+          </div>
+          <p id="advMsg" class="adv-msg" role="status"></p>
+          <p class="meta" id="lastRow" hidden>Last sent <span id="lastSent" class="mono"></span></p>
+          <p class="meta"><span id="versionText"></span></p>
+        </div>
+      </details>
+    </main>
+
+    <script src="pair.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

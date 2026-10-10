@@ -5,7 +5,11 @@ import App from "./App";
 import { bootstrapApi } from "./lib/api";
 import "./index.css";
 
-const client = new QueryClient();
+const client = new QueryClient({
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: true, retry: 1 },
+  },
+});
 
 void bootstrapApi().then(() => {
   ReactDOM.createRoot(document.getElementById("root")!).render(

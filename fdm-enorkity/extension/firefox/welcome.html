@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Connect CatalystFDM</title>
+    <link rel="icon" href="icons/icon-32.png" />
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body {
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      .backdrop {
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 440px;
+        background:
+          radial-gradient(900px 340px at 50% -60px, rgba(62, 162, 240, 0.32), transparent 70%),
+          var(--hero);
+        -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, transparent 100%);
+        mask-image: linear-gradient(to bottom, #000 0%, #000 58%, transparent 100%);
+        z-index: 0;
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 52px 16px 40px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 30px;
+        color: #fff;
+        font: 600 20px/1 var(--font-display);
+        letter-spacing: -0.02em;
+      }
+
+      .brand img {
+        display: block;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+      }
+
+      .card {
+        padding: 44px 40px 36px;
+        border-radius: var(--r-lg);
+        background: var(--card-glass);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid var(--card-edge);
+        box-shadow: var(--shadow-2);
+        text-align: center;
+      }
+
+      :root {
+        --card-glass: rgba(255, 255, 255, 0.88);
+        --card-edge: rgba(255, 255, 255, 0.7);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --card-glass: rgba(15, 25, 46, 0.82);
+          --card-edge: rgba(62, 162, 240, 0.16);
+        }
+      }
+
+      .card > [data-phase] {
+        display: grid;
+        justify-items: center;
+        gap: 12px;
+      }
+
+      .eyebrow {
+        color: var(--accent-text);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+
+      h1 {
+        font: 700 28px/1.15 var(--font-display);
+        letter-spacing: -0.028em;
+        color: var(--text);
+        text-wrap: balance;
+      }
+
+      .lede {
+        max-width: 400px;
+        color: var(--text-2);
+        font-size: 15px;
+        line-height: 1.5;
+        text-wrap: pretty;
+      }
+
+      .code {
+        --tile-w: clamp(56px, 17vw, 74px);
+        --tile-h: clamp(68px, 20vw, 90px);
+        --tile-font: clamp(34px, 10vw, 48px);
+        --tile-gap: clamp(8px, 2.6vw, 12px);
+        margin: 14px 0 6px;
+      }
+
+      .instruction {
+        font-size: 17px;
+        font-weight: 500;
+        letter-spacing: -0.015em;
+        color: var(--text);
+      }
+
+      .instruction strong {
+        font-weight: 700;
+      }
+
+      .hint {
+        color: var(--text-3);
+        font-size: 12.5px;
+        min-height: 1.4em;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .actions .btn {
+        min-width: 150px;
+      }
+
+      .app-icon {
+        display: block;
+        border-radius: 17px;
+        box-shadow: 0 10px 30px rgba(0, 49, 107, 0.28);
+        margin-bottom: 4px;
+      }
+
+      .status-icon.lg {
+        width: 64px;
+        height: 64px;
+      }
+
+      .big-spin {
+        width: 26px;
+        height: 26px;
+        border-width: 2.5px;
+        color: var(--brand);
+        margin: 18px 0 6px;
+      }
+
+      .tips {
+        list-style: none;
+        margin: 10px 0 4px;
+        padding: 0;
+        width: 100%;
+        display: grid;
+        gap: 2px;
+        text-align: left;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        overflow: hidden;
+      }
+
+      .tips li {
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 12px;
+        align-items: start;
+        padding: 14px 16px;
+        position: relative;
+      }
+
+      .tips li + li::before {
+        content: "";
+        position: absolute;
+        top: -1px;
+        left: 62px;
+        right: 0;
+        border-top: 1px solid var(--border);
+      }
+
+      .tip-ico {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        background: linear-gradient(150deg, #3ea2f0, #0b7fd4 55%, #1d4ed8);
+        box-shadow: 0 2px 6px rgba(11, 127, 212, 0.25);
+      }
+
+      .tips strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--text);
+      }
+
+      .tips span.t {
+        display: block;
+        margin-top: 2px;
+        color: var(--text-2);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .manual {
+        margin: 18px auto 0;
+        max-width: 420px;
+      }
+
+      .manual > summary {
+        margin: 0 auto;
+      }
+
+      .manual .advanced-body {
+        display: grid;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        box-shadow: var(--shadow-1);
+      }
+
+      .manual .adv-msg {
+        font-size: 12.5px;
+        color: var(--text-2);
+        overflow-wrap: anywhere;
+      }
+
+      .manual .adv-msg.bad {
+        color: var(--danger);
+      }
+
+      .manual .adv-msg:empty {
+        display: none;
+      }
+
+      footer {
+        margin-top: 22px;
+        text-align: center;
+        color: var(--text-3);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 520px) {
+        .shell {
+          padding-top: 36px;
+        }
+
+        .card {
+          padding: 32px 20px 28px;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .lede {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="brand">
+        <img src="icons/mark-reverse.svg" width="44" height="44" alt="" />
+        <span>CatalystFDM</span>
+      </header>
+
+      <section class="card" aria-live="polite">
+        <div data-phase="checking" class="view">
+          <span class="spin big-spin" aria-hidden="true"></span>
+          <p class="lede">Looking for CatalystFDM on this computer…</p>
+        </div>
+
+        <div data-phase="code" class="view" hidden>
+          <p class="eyebrow">Connect <span class="browser-name">your browser</span></p>
+          <h1>Confirm this code</h1>
+          <p class="lede">CatalystFDM is showing the same four digits.</p>
+          <div id="tiles" class="code" role="img" aria-label="Connection code"></div>
+          <p class="instruction">Click <strong>Allow</strong> in CatalystFDM</p>
+          <div class="waiting"><span class="pulse" aria-hidden="true"></span><span id="waitText">Waiting for approval…</span></div>
+          <button type="button" class="btn btn-link" data-action="restart" style="margin-top: 6px">Get a new code</button>
+        </div>
+
+        <div data-phase="offline" class="view" hidden>
+          <img class="app-icon" src="icons/app-icon.svg" width="72" height="72" alt="" />
+          <h1>Open CatalystFDM first</h1>
+          <p class="lede">The app needs to be running on this computer. We'll connect the moment it is.</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary btn-lg" data-action="retry">Retry</button>
+          </div>
+          <p class="hint" id="retryText"></p>
+        </div>
+
+        <div data-phase="connected" class="view" hidden>
+          <div class="status-icon ok lg">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="draw" d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <h1>Connected — you're all set</h1>
+          <p class="lede"><span class="browser-name">Your browser</span> now sends downloads straight to CatalystFDM.</p>
+          <ul class="tips">
+            <li>
+              <span class="tip-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></span>
+              <div><strong>The download button on videos</strong><span class="t">Play a video and tap the round button in its corner to pick a quality.</span></div>
+            </li>
+            <li>
+              <span class="tip-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 7.07 17 2.51-7.39L21 11.07z"/></svg></span>
+              <div><strong>Right-click → Download with CatalystFDM</strong><span class="t">Works on links, videos, audio and whole pages.</span></div>
+            </li>
+            <li>
+              <span class="tip-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span>
+              <div><strong>The toolbar button</strong><span class="t">Pin CatalystFDM next to the address bar to grab the video on any tab in one click.</span></div>
+            </li>
+          </ul>
+          <div class="actions">
+            <a class="btn btn-lg" href="http://127.0.0.1:5173/" target="_blank" rel="noopener noreferrer">Open CatalystFDM</a>
+            <button type="button" class="btn btn-primary btn-lg" id="doneBtn">Done</button>
+          </div>
+        </div>
+
+        <div data-phase="denied" class="view" hidden>
+          <div class="status-icon danger lg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+          </div>
+          <h1>Connection declined</h1>
+          <p class="lede">Someone clicked Don't Allow in CatalystFDM. If that was a mistake, try again.</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+          </div>
+        </div>
+
+        <div data-phase="expired" class="view" hidden>
+          <div class="status-icon warn lg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h1>That code expired</h1>
+          <p class="lede">Codes last five minutes. Get a fresh one, then click Allow in CatalystFDM.</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+          </div>
+        </div>
+
+        <div data-phase="error" class="view" hidden>
+          <div class="status-icon danger lg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          </div>
+          <h1>Couldn't connect</h1>
+          <p class="lede" id="errText"></p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary btn-lg" data-action="restart">Try again</button>
+          </div>
+        </div>
+
+        <div data-phase="unavailable" class="view" hidden>
+          <h1>Open this from the extension</h1>
+          <p class="lede" id="unavailableText">This page only works inside the CatalystFDM extension.</p>
+        </div>
+      </section>
+
+      <details class="advanced manual" id="manual">
+        <summary>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          Connect with a token instead
+        </summary>
+        <div class="advanced-body">
+          <div>
+            <label class="field-label" for="apiBase">App address</label>
+            <input id="apiBase" class="field" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:8765" />
+          </div>
+          <div>
+            <label class="field-label" for="token">Token from CatalystFDM → Settings</label>
+            <input id="token" class="field" type="password" spellcheck="false" autocomplete="off" placeholder="Paste token" />
+          </div>
+          <button type="button" id="useToken" class="btn btn-primary">Connect with token</button>
+          <p id="manualMsg" class="adv-msg" role="status"></p>
+        </div>
+      </details>
+
+      <footer>
+        Everything stays on this computer — CatalystFDM only talks to 127.0.0.1.<br />
+        <span id="versionText"></span>
+      </footer>
+    </main>
+
+    <script src="pair.js"></script>
+    <script src="welcome.js"></script>
+  </body>
+</html>

@@ -20,6 +20,9 @@ type Config struct {
 	ChunkSizeBytes          int64
 	AllowedExtensionOrigins []string
 	LogLevel                string
+	// YtdlpPath / FfmpegPath override binary discovery for the media engine (see docs/media-engine.md).
+	YtdlpPath  string
+	FfmpegPath string
 }
 
 // Load reads configuration from environment variables. When FDM_EMBEDDED=1 (Tauri sidecar),
@@ -40,6 +43,8 @@ func Load(path string) (*Config, error) {
 		ChunkSizeBytes:          int64(getEnvInt("CHUNK_SIZE_BYTES", 4*1024*1024)),
 		AllowedExtensionOrigins: splitCSV(getEnv("ALLOWED_EXTENSION_ORIGINS", "")),
 		LogLevel:                getEnv("LOG_LEVEL", "info"),
+		YtdlpPath:               getEnv("YTDLP_PATH", ""),
+		FfmpegPath:              getEnv("FFMPEG_PATH", ""),
 	}
 	return c, nil
 }

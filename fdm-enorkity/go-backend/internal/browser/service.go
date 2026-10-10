@@ -2,6 +2,7 @@ package browser
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"fdm-enorkity/internal/models"
@@ -13,13 +14,18 @@ import (
 type Service struct {
 	DB       *gorm.DB
 	Settings *settings.Store
+
+	once    sync.Once
+	pairing *pairing
 }
 
-func (s *Service) Pair(browserName, extensionID string) (*models.BrowserConnection, error) {
-	sum := s.Settings.PairingTokenHash()
-	if sum == "" {
-		return nil, errors.New("pairing token not configured")
+// Pair registers the browser presenting token (the legacy manual-token flow). The connection
+// stores that token's hash, so revoking it later locks this browser out.
+func (s *Service) Pair(browserName, extensionID, token string) (*models.BrowserConnection, error) {
+	if token == "" {
+		return nil, errors.New("pairing token required")
 	}
+	sum := HashToken(token)
 	now := time.Now()
 
 	var conn models.BrowserConnection
@@ -66,6 +72,20 @@ func (s *Service) ListConnections() ([]models.BrowserConnection, error) {
 	return rows, nil
 }
 
+// Revoke locks a browser out. Its token hash is cleared; if it was using the legacy shared
+// token, that token is retired too, since otherwise the browser could simply pair again with it.
 func (s *Service) Revoke(id string) error {
-	return s.DB.Model(&models.BrowserConnection{}).Where("id = ?", id).Update("status", models.BrowserRevoked).Error
+	var conn models.BrowserConnection
+	if err := s.DB.First(&conn, "id = ?", id).Error; err != nil {
+		return err
+	}
+	if legacy := s.Settings.PairingTokenHash(); legacy != "" && conn.PairingTokenHash == legacy {
+		if err := s.Settings.SetPairingTokenHash(""); err != nil {
+			return err
+		}
+	}
+	return s.DB.Model(&models.BrowserConnection{}).Where("id = ?", id).Updates(map[string]any{
+		"status":             models.BrowserRevoked,
+		"pairing_token_hash": "",
+	}).Error
 }

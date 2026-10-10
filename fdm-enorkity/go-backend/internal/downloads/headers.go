@@ -69,14 +69,38 @@ func parseAcceptRanges(h string) bool {
 	return strings.Contains(strings.ToLower(h), "bytes")
 }
 
+// preferredExtensions pins the extension for common types. mime.ExtensionsByType returns
+// extensions sorted alphabetically from the OS tables, so on Linux "video/mp4" yields ".f4v".
+var preferredExtensions = map[string]string{
+	"video/mp4":                    ".mp4",
+	"video/webm":                   ".webm",
+	"video/quicktime":              ".mov",
+	"video/x-matroska":             ".mkv",
+	"video/x-msvideo":              ".avi",
+	"audio/mpeg":                   ".mp3",
+	"audio/mp4":                    ".m4a",
+	"audio/ogg":                    ".ogg",
+	"audio/wav":                    ".wav",
+	"image/jpeg":                   ".jpg",
+	"text/plain":                   ".txt",
+	"application/zip":              ".zip",
+	"application/pdf":              ".pdf",
+	"application/x-7z-compressed":  ".7z",
+	"application/vnd.rar":          ".rar",
+	"application/x-rar-compressed": ".rar",
+}
+
 // ExtensionFromMIME returns a single extension like ".mp4" for "video/mp4", or "".
 func ExtensionFromMIME(mimeType string) string {
-	mt := strings.TrimSpace(mimeType)
+	mt := strings.ToLower(strings.TrimSpace(mimeType))
 	if i := strings.Index(mt, ";"); i >= 0 {
 		mt = strings.TrimSpace(mt[:i])
 	}
 	if mt == "" {
 		return ""
+	}
+	if ext, ok := preferredExtensions[mt]; ok {
+		return ext
 	}
 	exts, err := mime.ExtensionsByType(mt)
 	if err != nil || len(exts) == 0 {

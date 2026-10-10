@@ -6,8 +6,8 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "FDM-Enorkity",
-    "version": "0.1.0"
+    "productName": "CatalystFDM",
+    "version": "0.3.0"
   },
   "tauri": {
     "bundle": {
@@ -33,10 +33,10 @@
     },
     "windows": [
       {
-        "title": "FDM-Enorkity",
-        "width": 1220,
-        "height": 780,
-        "minWidth": 900,
+        "title": "CatalystFDM",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 960,
         "minHeight": 600,
         "resizable": true
       }

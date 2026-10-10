@@ -1,0 +1,3 @@
+# Local test data and builds (CatalystFDM dev runs point DATABASE_PATH/STORAGE_ROOT here)
+.local/
+bin/

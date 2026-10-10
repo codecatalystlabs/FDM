@@ -1,62 +1,44 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CircleCheck, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
-import { Button, Card } from "@/components/ui";
+import { useDownloads } from "@/lib/hooks";
+import { Page } from "@/components/Layout";
+import { FailedRow } from "@/components/DownloadCards";
+import { Button, EmptyState } from "@/components/ui";
 
 export default function Failed() {
   const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["downloads", "failed"],
-    queryFn: () => api.listDownloads({ status: "failed" }),
-    refetchInterval: 4000,
+  const q = useDownloads();
+  const items = (q.data?.items ?? []).filter((d) => d.status === "failed");
+  const retryAll = useMutation({
+    mutationFn: api.queueRetryFailed,
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["downloads"] }),
   });
-
-  const retry = useMutation({
-    mutationFn: api.retry,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["downloads"] }),
-  });
-  const del = useMutation({
-    mutationFn: api.deleteDownload,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["downloads"] }),
-  });
-
-  const items = q.data?.items ?? [];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Failed</h1>
-        <p className="mt-1 text-sm text-muted">Inspect errors and retry when the server supports it.</p>
-      </div>
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <Card className="p-10 text-center text-sm text-muted">No failed downloads.</Card>
-        ) : (
-          items.map((d) => (
-            <Card key={d.id} className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{d.filename}</div>
-                  <div className="truncate text-xs text-muted">{d.url}</div>
-                  <div className="mt-2 rounded-md border border-white/10 bg-black/20 p-3 text-xs text-red-200 html.light:border-slate-200 html.light:bg-slate-50 html.light:text-red-700">
-                    {d.error_message || "Unknown error"}
-                  </div>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button variant="outline" onClick={() => retry.mutate(d.id)}>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Retry
-                  </Button>
-                  <Button variant="danger" onClick={() => del.mutate(d.id)}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
-    </div>
+    <Page
+      title="Failed"
+      subtitle={items.length ? "These didn't finish. Most can simply be retried." : "Downloads that couldn't finish show up here"}
+      actions={
+        items.length > 1 ? (
+          <Button variant="tinted" onClick={() => retryAll.mutate()}>
+            <RotateCcw className="h-3.5 w-3.5" />
+            Retry all
+          </Button>
+        ) : null
+      }
+    >
+      {items.length === 0 ? (
+        <EmptyState icon={<CircleCheck className="text-ok" />} title="All clear">
+          Nothing has failed. When something does, you'll see why — in plain words — and can retry with one click.
+        </EmptyState>
+      ) : (
+        <div className="space-y-2.5">
+          {items.map((d) => (
+            <FailedRow key={d.id} d={d} />
+          ))}
+        </div>
+      )}
+    </Page>
   );
 }

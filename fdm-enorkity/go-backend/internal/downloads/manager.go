@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"fdm-enorkity/internal/config"
+	"fdm-enorkity/internal/media"
 	"fdm-enorkity/internal/models"
 	"fdm-enorkity/internal/security"
 	"fdm-enorkity/internal/settings"
@@ -27,10 +28,12 @@ type Manager struct {
 	log      *slog.Logger
 	cfg      *config.Config
 	settings *settings.Store
+	Media    *media.Engine
 
 	mu      sync.Mutex
 	cancel  map[string]context.CancelFunc
 	workers sync.WaitGroup
+	pace    pacer // shared bandwidth limit for multi-connection downloads
 }
 
 func NewManager(db *gorm.DB, log *slog.Logger, cfg *config.Config, st *settings.Store) *Manager {
@@ -39,6 +42,7 @@ func NewManager(db *gorm.DB, log *slog.Logger, cfg *config.Config, st *settings.
 		log:      log,
 		cfg:      cfg,
 		settings: st,
+		Media:    &media.Engine{YtdlpPath: cfg.YtdlpPath, FfmpegPath: cfg.FfmpegPath, StorageDir: cfg.StorageRoot},
 		cancel:   make(map[string]context.CancelFunc),
 	}
 }
@@ -81,6 +85,19 @@ type AddDownloadInput struct {
 	Source        string
 	Category      string
 	ExecConfirmed bool
+
+	// Media engine (see docs/media-engine.md).
+	Engine          string
+	QualityID       string
+	Title           string
+	Thumbnail       string
+	Site            string
+	DurationSeconds int
+	SizeBytes       int64
+
+	// SkipExisting returns a download already saved or queued under the same name (marked
+	// Skipped) instead of adding a duplicate; see existing.go.
+	SkipExisting bool
 }
 
 func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
@@ -89,8 +106,23 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 	if err != nil {
 		return nil, err
 	}
+	if in.SkipExisting {
+		if dl := m.findExisting(existingName(in)); dl != nil {
+			dl.Skipped = true
+			return dl, nil
+		}
+	}
+	switch in.Engine {
+	case "", models.EngineHTTP:
+	case models.EngineMedia:
+		return m.addMediaDownload(in)
+	default:
+		return nil, fmt.Errorf("unknown engine %q", in.Engine)
+	}
 
 	name := strings.TrimSpace(in.Filename)
+	// A name typed in the app is final; the extension's names stay overridable (see applySuggestedFilename).
+	namedByUser := name != "" && defaultSource(in.Source) == "desktop"
 	if name == "" {
 		name = strings.TrimSpace(in.PageTitle)
 	}
@@ -111,6 +143,7 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 			URL:                 in.URL,
 			Filename:            name,
 			OriginalFilename:    name,
+			NamedByUser:         namedByUser,
 			Status:              models.DownloadPending,
 			Source:              defaultSource(in.Source),
 			Referrer:            in.Referrer,
@@ -124,7 +157,7 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 		if err := m.db.Create(dl).Error; err != nil {
 			return nil, err
 		}
-		qi := &models.QueueItem{DownloadID: dl.ID, Priority: 0, Position: m.nextQueuePosition(), Status: models.QueuePending}
+		qi := &models.QueueItem{DownloadID: dl.ID, Priority: 0, Position: m.nextQueuePosition(), Status: models.QueuePaused}
 		if err := m.db.Create(qi).Error; err != nil {
 			return nil, err
 		}
@@ -140,6 +173,7 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 		URL:                 in.URL,
 		Filename:            name,
 		OriginalFilename:    name,
+		NamedByUser:         namedByUser,
 		Status:              models.DownloadPending,
 		Source:              defaultSource(in.Source),
 		Referrer:            in.Referrer,
@@ -149,6 +183,11 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 		ExecConfirmed:       in.ExecConfirmed || !m.settings.GetBool(settings.KeyExecutableConfirm, true),
 		FileSize:            -1,
 		TempFilePath:        "", // set after ID
+		// Optional details from the browser (a series episode's title and poster) for the library.
+		Title:           strings.TrimSpace(in.Title),
+		Thumbnail:       cleanThumbnail(in.Thumbnail),
+		Site:            strings.TrimSpace(in.Site),
+		DurationSeconds: in.DurationSeconds,
 	}
 	if err := m.db.Create(dl).Error; err != nil {
 		return nil, err
@@ -158,7 +197,9 @@ func (m *Manager) AddDownload(in AddDownloadInput) (*models.Download, error) {
 	if err := m.db.Model(dl).Update("temp_file_path", partPath).Error; err != nil {
 		return nil, err
 	}
-	qi := &models.QueueItem{DownloadID: dl.ID, Priority: 0, Position: m.nextQueuePosition(), Status: models.QueuePending}
+	// Held until StartDownload (or ScheduleNight) releases it: the scheduler must not pick a
+	// download up while the caller is still deciding when it should run.
+	qi := &models.QueueItem{DownloadID: dl.ID, Priority: 0, Position: m.nextQueuePosition(), Status: models.QueuePaused}
 	if err := m.db.Create(qi).Error; err != nil {
 		return nil, err
 	}
@@ -208,6 +249,23 @@ func (m *Manager) ConfirmExecutable(id string) error {
 }
 
 func (m *Manager) StartDownload(id string) error {
+	// Checked and queued under the scheduler's lock, so a download the scheduler is running (or
+	// has just finished) is never queued a second time.
+	m.mu.Lock()
+	err := m.queueForStart(id)
+	m.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	m.schedule()
+	return nil
+}
+
+// queueForStart marks a download queued and its queue item pending. Caller holds m.mu.
+func (m *Manager) queueForStart(id string) error {
+	if _, running := m.cancel[id]; running {
+		return nil
+	}
 	var dl models.Download
 	if err := m.db.First(&dl, "id = ?", id).Error; err != nil {
 		return err
@@ -233,7 +291,6 @@ func (m *Manager) StartDownload(id string) error {
 	_ = m.db.Model(&models.QueueItem{}).Where("download_id = ?", id).Updates(map[string]any{
 		"status": models.QueuePending,
 	}).Error
-	m.schedule()
 	return nil
 }
 
@@ -242,26 +299,39 @@ func (m *Manager) PauseDownload(id string) error {
 	cancelFn, ok := m.cancel[id]
 	if ok {
 		delete(m.cancel, id)
+	} else if err := m.holdWaiting(id); err != nil { // under the lock: the scheduler can't pick it meanwhile
+		m.mu.Unlock()
+		return err
 	}
 	m.mu.Unlock()
-
-	now := time.Now()
-	if ok {
-		_ = m.db.Model(&models.Download{}).Where("id = ?", id).Updates(map[string]any{
-			"status":     models.DownloadPaused,
-			"paused_at":  now,
-			"updated_at": now,
-		}).Error
-		_ = m.db.Model(&models.QueueItem{}).Where("download_id = ?", id).Update("status", models.QueuePaused).Error
-		cancelFn()
+	if !ok {
 		return nil
 	}
-	return m.db.Model(&models.Download{}).Where("id = ? AND status IN ?", id, []models.DownloadStatus{
+
+	now := time.Now()
+	_ = m.db.Model(&models.Download{}).Where("id = ?", id).Updates(map[string]any{
+		"status":     models.DownloadPaused,
+		"paused_at":  now,
+		"updated_at": now,
+	}).Error
+	_ = m.db.Model(&models.QueueItem{}).Where("download_id = ?", id).Update("status", models.QueuePaused).Error
+	cancelFn()
+	return nil
+}
+
+// holdWaiting pauses a download that is only waiting in the queue, queue item included, so the
+// scheduler doesn't start it when a slot frees up. Caller holds m.mu.
+func (m *Manager) holdWaiting(id string) error {
+	res := m.db.Model(&models.Download{}).Where("id = ? AND status IN ?", id, []models.DownloadStatus{
 		models.DownloadPending,
 		models.DownloadQueued,
 	}).Updates(map[string]any{
 		"status": models.DownloadPaused,
-	}).Error
+	})
+	if res.Error != nil || res.RowsAffected == 0 {
+		return res.Error
+	}
+	return m.db.Model(&models.QueueItem{}).Where("download_id = ?", id).Update("status", models.QueuePaused).Error
 }
 
 func (m *Manager) ResumeDownload(id string) error {
@@ -318,9 +388,8 @@ func (m *Manager) RetryDownload(id string) error {
 	if dl.RequiresExecConfirm && !dl.ExecConfirmed {
 		return fmt.Errorf("executable confirmation required")
 	}
-	if dl.TempFilePath != "" {
-		_ = os.Remove(dl.TempFilePath)
-	}
+	removeTemp(&dl)
+	m.clearSegments(id)
 	_ = m.db.Model(&models.Download{}).Where("id = ?", id).Updates(map[string]any{
 		"status":                 models.DownloadQueued,
 		"error_message":          "",
@@ -337,8 +406,7 @@ func (m *Manager) RetryDownload(id string) error {
 	// Fresh temp file on retry from failed.
 	if dl.TempFilePath == "" {
 		dir := m.settings.DownloadDirectory(m.cfg.DefaultDownloadDir)
-		partPath := filepath.Join(dir, dl.ID+".part")
-		_ = m.db.Model(&models.Download{}).Where("id = ?", id).Update("temp_file_path", partPath).Error
+		_ = m.db.Model(&models.Download{}).Where("id = ?", id).Update("temp_file_path", tempPathFor(&dl, dir)).Error
 	}
 	m.schedule()
 	return nil
@@ -346,11 +414,15 @@ func (m *Manager) RetryDownload(id string) error {
 
 func (m *Manager) DeleteDownload(id string) error {
 	m.CancelDownload(id)
+	_ = os.Remove(m.Media.PosterPath(id))
 	return m.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("download_id = ?", id).Delete(&models.QueueItem{}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("download_id = ?", id).Delete(&models.DownloadLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("download_id = ?", id).Delete(&models.DownloadChunk{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&models.Download{}, "id = ?", id).Error
@@ -365,10 +437,25 @@ func (m *Manager) DeleteDownloadFile(id string) error {
 	if dl.FilePath != "" {
 		_ = os.Remove(dl.FilePath)
 	}
-	if dl.TempFilePath != "" {
-		_ = os.Remove(dl.TempFilePath)
-	}
+	removeTemp(&dl)
 	return m.DeleteDownload(id)
+}
+
+// RecoverInterrupted runs once at startup. Downloads that were running when the app last quit
+// have no worker any more (and would sit at "active" forever); queue them again so they resume
+// where they stopped, along with anything that was already waiting.
+func (m *Manager) RecoverInterrupted() int64 {
+	res := m.db.Model(&models.Download{}).Where("status = ?", models.DownloadActive).Updates(map[string]any{
+		"status":                 models.DownloadQueued,
+		"speed_bytes_per_second": 0,
+		"eta_seconds":            0,
+	})
+	_ = m.db.Model(&models.QueueItem{}).Where("status = ?", models.QueueActive).Update("status", models.QueuePending).Error
+	if res.RowsAffected > 0 {
+		m.log.Info("resuming interrupted downloads", "count", res.RowsAffected)
+	}
+	m.schedule()
+	return res.RowsAffected
 }
 
 func (m *Manager) schedule() {

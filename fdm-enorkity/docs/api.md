@@ -1,4 +1,4 @@
-# REST API — FDM-Enorkity
+# REST API — CatalystFDM
 
 **Base URL (MVP):** `http://127.0.0.1:8765` (configurable via `APP_PORT` / `APP_HOST`).
 
@@ -84,7 +84,7 @@
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/v1/browser/pair` | `{ "browser_name", "extension_id" }` + pairing header |
-| POST | `/api/v1/browser/add-download` | `{ "url", "referrer?" }` + pairing header |
+| POST | `/api/v1/browser/add-download` | `{ "url", "referrer?", "page_title?", "title?", "thumbnail?", "site?", "skip_existing?" }` + media fields (`docs/media-engine.md`) + pairing header |
 | GET | `/api/v1/browser/status` | |
 | GET | `/api/v1/browser/connections` | |
 | DELETE | `/api/v1/browser/connections/:id` | Revoke |

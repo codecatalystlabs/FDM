@@ -10,6 +10,11 @@ import (
 type DownloadStatus string
 
 const (
+	EngineHTTP  = "http"
+	EngineMedia = "media"
+)
+
+const (
 	DownloadPending   DownloadStatus = "pending"
 	DownloadQueued    DownloadStatus = "queued"
 	DownloadActive    DownloadStatus = "active"
@@ -25,6 +30,7 @@ type Download struct {
 	FinalURL             string         `json:"final_url"`
 	Filename             string         `json:"filename"`
 	OriginalFilename     string         `json:"original_filename"`
+	NamedByUser          bool           `json:"named_by_user"` // the user chose Filename; headers and URLs don't rename it
 	FilePath             string         `json:"file_path"`
 	TempFilePath         string         `json:"temp_file_path"`
 	FileSize             int64          `json:"file_size"`
@@ -43,12 +49,28 @@ type Download struct {
 	Referrer             string         `json:"referrer"`
 	RequiresExecConfirm  bool           `json:"requires_exec_confirm"`
 	ExecConfirmed        bool           `json:"exec_confirmed"`
+	// Media engine (yt-dlp) fields; Engine "" or "http" is the native downloader.
+	Engine               string         `json:"engine"`
+	QualityID            string         `json:"quality_id"`
+	QualityLabel         string         `json:"quality_label"`
+	Title                string         `json:"title"`
+	Thumbnail            string         `json:"thumbnail"`
+	Site                 string         `json:"site"`
+	DurationSeconds      int            `json:"duration_seconds"`
+	Stage                string         `json:"stage"`
+	// Night data: NightOnly downloads run only inside the night window; StartAfter is when a
+	// waiting one may start (see downloads/night.go).
+	NightOnly            bool           `json:"night_only"`
+	StartAfter           *time.Time     `json:"start_after"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
 	StartedAt            *time.Time     `json:"started_at"`
 	CompletedAt          *time.Time     `json:"completed_at"`
 	PausedAt             *time.Time     `json:"paused_at"`
 	CancelledAt          *time.Time     `json:"cancelled_at"`
+	// Skipped is set (never stored) when add-download with skip_existing returned this existing
+	// download instead of adding a duplicate.
+	Skipped              bool           `gorm:"-" json:"skipped,omitempty"`
 }
 
 func (d *Download) BeforeCreate(tx *gorm.DB) error {
