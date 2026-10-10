@@ -1,8 +1,8 @@
-# FDM-Enorkity — Architecture
+# CatalystFDM — Architecture
 
 ## Overview
 
-FDM-Enorkity is a **local-first** download manager. A Go process owns the download engine, persistence, and a **localhost-only** HTTP API (Fiber). The Tauri desktop shell embeds the React UI and, in packaged builds, **starts the Go server as a sidecar** bound to **127.0.0.1**. Browser extensions talk **only** to `127.0.0.1` with a **pairing token**; they never receive browsing history from the app.
+CatalystFDM is a **local-first** download manager. A Go process owns the download engine, persistence, and a **localhost-only** HTTP API (Fiber). The Tauri desktop shell embeds the React UI and, in packaged builds, **starts the Go server as a sidecar** bound to **127.0.0.1**. Browser extensions talk **only** to `127.0.0.1` with a **pairing token**; they never receive browsing history from the app.
 
 ## High-Level Diagram
 
@@ -74,3 +74,13 @@ flowchart LR
 
 - Phase 4+: multi-chunk parallel workers, merge, advanced bandwidth shaping.  
 - Packaging: code signing, store listings, and polished installers (current bundles are functional but not “store final”).
+
+## Direct-file engine (CatalystFDM 0.3)
+
+- **Multi-connection** (`internal/downloads/segmented.go`): when HEAD reports `Accept-Ranges: bytes` and the file is
+  ≥ 8 MB, it is split into up to `connections_per_download` (default 4, max 16) byte ranges fetched in parallel over
+  separate HTTP/1.1 connections and written in place with `WriteAt`. Progress per range lives in `download_chunks`, so
+  pause/resume and app restarts continue every range. A server that answers a range request with 200 drops back to one
+  stream; a connection silent for 30 s is cut and retried (5 attempts with back-off).
+- **Restart recovery**: `Manager.RecoverInterrupted()` at startup re-queues downloads left `active` by a crash or quit.
+- **Night scheduler**: `Manager.RunNightScheduler()` (see `docs/media-engine.md` → Night data).

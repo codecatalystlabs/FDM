@@ -18,7 +18,11 @@ import (
 )
 
 func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
-	m.log.Info("download started", "id", dl.ID, "url", dl.URL)
+	m.log.Info("download started", "id", dl.ID, "url", dl.URL, "engine", dl.Engine)
+	if dl.Engine == models.EngineMedia {
+		m.runMediaDownload(ctx, dl)
+		return
+	}
 
 	if strings.TrimSpace(dl.TempFilePath) == "" {
 		m.fail(dl, fmt.Errorf("temp file path not configured"))
@@ -37,21 +41,27 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 		return
 	}
 
-	// HEAD for hints (optional).
+	// HEAD for hints (optional). Send the same Referer as the GET: CDNs with hotlink protection
+	// answer a bare HEAD with an HTML error page, whose headers must not be taken as the file's.
 	supportsRange := false
 	var headLen int64 = -1
 	if headReq, err := http.NewRequestWithContext(ctx, http.MethodHead, dl.URL, nil); err == nil {
+		if dl.Referrer != "" {
+			headReq.Header.Set("Referer", dl.Referrer)
+		}
 		if headResp, err := client.Do(headReq); err == nil {
 			_ = headResp.Body.Close()
-			supportsRange = parseAcceptRanges(headResp.Header.Get("Accept-Ranges"))
-			if cl := headResp.Header.Get("Content-Length"); cl != "" {
-				if n, err := strconv.ParseInt(cl, 10, 64); err == nil {
-					headLen = n
+			if headResp.StatusCode >= 200 && headResp.StatusCode < 300 {
+				supportsRange = parseAcceptRanges(headResp.Header.Get("Accept-Ranges"))
+				if cl := headResp.Header.Get("Content-Length"); cl != "" {
+					if n, err := strconv.ParseInt(cl, 10, 64); err == nil {
+						headLen = n
+					}
 				}
-			}
-			applySuggestedFilename(dl, headResp)
-			if mt := headResp.Header.Get("Content-Type"); mt != "" {
-				dl.MimeType = mt
+				applySuggestedFilename(dl, headResp)
+				if mt := headResp.Header.Get("Content-Type"); mt != "" {
+					dl.MimeType = mt
+				}
 			}
 		}
 	}
@@ -59,6 +69,28 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 	existing := int64(0)
 	if st, err := os.Stat(dl.TempFilePath); err == nil {
 		existing = st.Size()
+	}
+
+	// Large files on servers that honour ranges download over several connections
+	// (segmented.go). A single-stream partial file from before keeps resuming as one stream.
+	if supportsRange && headLen > 0 && (m.hasSegments(dl.ID) || (existing == 0 && segmentCount(headLen, m.settings.ConnectionsPerDownload()) > 1)) {
+		err := m.runSegmented(ctx, dl, m.segmentClient(), headLen)
+		switch {
+		case err == nil:
+			m.finishHTTP(dl)
+			return
+		case ctx.Err() != nil:
+			m.pauseOrCancel(dl, ctx.Err())
+			return
+		case errors.Is(err, errNoRanges):
+			m.clearSegments(dl.ID)
+			_ = os.Truncate(dl.TempFilePath, 0)
+			existing = 0
+			m.appendLog(dl.ID, models.LogInfo, "server ignored ranges; using one connection", "")
+		default:
+			m.fail(dl, err)
+			return
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dl.URL, nil)
@@ -92,8 +124,8 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 	}
 
 	applySuggestedFilename(dl, resp)
-	if dl.MimeType == "" {
-		dl.MimeType = resp.Header.Get("Content-Type")
+	if mt := resp.Header.Get("Content-Type"); mt != "" {
+		dl.MimeType = mt
 	}
 	dl.FinalURL = resp.Request.URL.String()
 
@@ -235,6 +267,11 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 			break
 		}
 		if rerr != nil {
+			// A pause/cancel aborts the in-flight body read; that is a stop, not a failure.
+			if ctx.Err() != nil {
+				m.pauseOrCancel(dl, ctx.Err())
+				return
+			}
 			m.fail(dl, rerr)
 			return
 		}
@@ -244,6 +281,20 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 		m.appendLog(dl.ID, models.LogWarn, "size mismatch after download", fmt.Sprintf(`{"expected":%d,"got":%d}`, dl.FileSize, dl.DownloadedBytes))
 	}
 
+	if err := f.Sync(); err != nil {
+		m.fail(dl, fmt.Errorf("sync temp file: %w", err))
+		return
+	}
+	if err := f.Close(); err != nil {
+		m.fail(dl, fmt.Errorf("close temp file: %w", err))
+		return
+	}
+	f = nil
+	m.finishHTTP(dl)
+}
+
+// finishHTTP names, categorises and moves a fully downloaded temp file into place.
+func (m *Manager) finishHTTP(dl *models.Download) {
 	if strings.TrimSpace(filepath.Ext(dl.Filename)) == "" {
 		if ext := ExtensionFromMIME(dl.MimeType); ext != "" {
 			base := strings.TrimSpace(dl.Filename)
@@ -257,22 +308,16 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 			dl.Extension = extensionFromFilename(dl.Filename)
 		}
 	}
+	// The category was guessed at enqueue time, before headers revealed the real extension.
+	if dl.Category == "" || dl.Category == "other" {
+		dl.Category = CategoryForExtension(dl.Extension)
+	}
 
 	finalPath, err := files.UniquePath(filepath.Dir(dl.TempFilePath), dl.Filename)
 	if err != nil {
 		m.fail(dl, err)
 		return
 	}
-	if err := f.Sync(); err != nil {
-		m.fail(dl, fmt.Errorf("sync temp file: %w", err))
-		return
-	}
-	if err := f.Close(); err != nil {
-		m.fail(dl, fmt.Errorf("close temp file: %w", err))
-		return
-	}
-	f = nil
-
 	if err := files.MoveOrReplace(dl.TempFilePath, finalPath); err != nil {
 		m.fail(dl, fmt.Errorf("finalize move: %w", err))
 		return
@@ -301,6 +346,7 @@ func (m *Manager) runDownload(ctx context.Context, dl *models.Download) {
 		"filename":          dl.Filename,
 		"original_filename": dl.OriginalFilename,
 		"extension":         dl.Extension,
+		"category":          dl.Category,
 		"final_url":         dl.FinalURL,
 		"mime_type":         dl.MimeType,
 		"file_size":         dl.FileSize,
@@ -362,7 +408,7 @@ func (m *Manager) pauseOrCancel(dl *models.Download, reason error) {
 }
 
 func applySuggestedFilename(dl *models.Download, resp *http.Response) {
-	if resp == nil {
+	if resp == nil || dl.NamedByUser {
 		return
 	}
 	fromCD := FilenameFromContentDisposition(resp)

@@ -10,7 +10,7 @@ const PANIC_LOG: &str = "fdm-enorkity-panic.txt";
 /// Call at the very start of `main` (before Tauri). Survives silent GUI exits.
 pub fn log_process_start() {
     let path = std::env::temp_dir().join(LAUNCH_LOG);
-    let line = format!("{:?} FDM-Enorkity exe started\n", SystemTime::now());
+    let line = format!("{:?} CatalystFDM exe started\n", SystemTime::now());
     let _ = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -56,7 +56,7 @@ into `desktop/src-tauri/webview2-runtime/` then run `npm run tauri:build:offline
         );
     }
     let body = format!(
-        "FDM-Enorkity could not create the desktop window (Tauri shell).\n\n{}\n{}{}\
+        "CatalystFDM could not create the desktop window (Tauri shell).\n\n{}\n{}{}\
 (See also %TEMP%\\{} for launch order.)\n",
         s,
         extra,
@@ -72,7 +72,7 @@ pub fn report_failure(summary: &str) {
     let path = std::env::temp_dir().join(LOG_BASENAME);
 
     let body = format!(
-        "FDM-Enorkity failed to initialize.\n\n{}\n\n\
+        "CatalystFDM failed to initialize.\n\n{}\n\n\
 ---\nTypical fixes on Windows\n\
 • If you packaged with fixedRuntime (offline WebView2), the desktop/src-tauri/webview2-runtime/\n\
   folder must contain a full extracted Microsoft Fixed Version runtime before npm run tauri:build.\n\
@@ -92,14 +92,14 @@ pub fn report_failure(summary: &str) {
 
 #[cfg(windows)]
 fn show_panic_alert(log_base: &str) {
-    let caption = b"FDM-Enorkity - error\0";
+    let caption = b"CatalystFDM - error\0";
     let message = format!(
         "The app crashed.\n\nDetails: \"%TEMP%\\{}\"\n\nPaste %TEMP% in Explorer's address bar.",
         log_base
     );
     let message_c = match std::ffi::CString::new(message) {
         Ok(s) => s,
-        Err(_) => std::ffi::CString::new("FDM-Enorkity crashed; see %TEMP% for logs.")
+        Err(_) => std::ffi::CString::new("CatalystFDM crashed; see %TEMP% for logs.")
             .expect("static panic message"),
     };
     unsafe {
@@ -126,16 +126,16 @@ fn show_panic_alert(log_base: &str) {
 
 #[cfg(windows)]
 fn show_alert(log_base: &str) {
-    let caption = b"FDM-Enorkity\0";
+    let caption = b"CatalystFDM\0";
 
     let message = format!(
-        "FDM-Enorkity could not start.\n\nDetails were written to \"%TEMP%\\{}\"\
+        "CatalystFDM could not start.\n\nDetails were written to \"%TEMP%\\{}\"\
          \n(Open Explorer and paste %TEMP% in the address bar.)",
         log_base
     );
     let message_c = match std::ffi::CString::new(message) {
         Ok(s) => s,
-        Err(_) => std::ffi::CString::new("FDM-Enorkity could not start.")
+        Err(_) => std::ffi::CString::new("CatalystFDM could not start.")
             .expect("literal has no NUL"),
     };
 

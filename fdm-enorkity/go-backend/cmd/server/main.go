@@ -40,7 +40,8 @@ func main() {
 		defer logCloser.Close()
 	}
 
-	db, err := database.Connect(cfg.DatabasePath, true)
+	// SQL tracing only at LOG_LEVEL=debug: the app polls every second, so it would flood stdout.
+	db, err := database.Connect(cfg.DatabasePath, cfg.LogLevel == "debug")
 	if err != nil {
 		log.Error("database", "err", err)
 		os.Exit(1)
@@ -57,6 +58,10 @@ func main() {
 	}
 
 	dm := downloads.NewManager(db, log, cfg, st)
+	dm.RecoverInterrupted()
+	bg, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	go dm.RunNightScheduler(bg)
 	br := &browser.Service{DB: db, Settings: st}
 
 	app := fiber.New(fiber.Config{
@@ -82,57 +87,60 @@ func main() {
 			"app://localhost",
 		}
 	}
+	allowOrigin := func(origin string) bool {
+		if embedded {
+			switch {
+			case strings.HasPrefix(origin, "tauri://"):
+				return true
+			case strings.HasPrefix(origin, "http://tauri.localhost"):
+				return true
+			case strings.HasPrefix(origin, "https://tauri.localhost"):
+				return true
+			case strings.HasPrefix(origin, "http://localhost"):
+				return true
+			case strings.HasPrefix(origin, "http://127.0.0.1"):
+				return true
+			case strings.HasPrefix(origin, "app://localhost"):
+				return true
+			case strings.HasPrefix(origin, "chrome-extension://"):
+				return true
+			case strings.HasPrefix(origin, "moz-extension://"):
+				return true
+			}
+		}
+		for _, p := range allow {
+			if p == "*" {
+				return true
+			}
+			if strings.HasSuffix(p, "/*") {
+				prefix := strings.TrimSuffix(p, "*")
+				if strings.HasPrefix(origin, prefix) {
+					return true
+				}
+				continue
+			}
+			// e.g. chrome-extension://* or moz-extension://* (not matched by /* rule above)
+			if strings.HasSuffix(p, "*") && len(p) > 1 {
+				prefix := strings.TrimSuffix(p, "*")
+				if prefix != "" && strings.HasPrefix(origin, prefix) {
+					return true
+				}
+			}
+			if strings.EqualFold(origin, p) {
+				return true
+			}
+		}
+		return false
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOriginsFunc: func(origin string) bool {
-			if embedded {
-				switch {
-				case strings.HasPrefix(origin, "tauri://"):
-					return true
-				case strings.HasPrefix(origin, "http://tauri.localhost"):
-					return true
-				case strings.HasPrefix(origin, "https://tauri.localhost"):
-					return true
-				case strings.HasPrefix(origin, "http://localhost"):
-					return true
-				case strings.HasPrefix(origin, "http://127.0.0.1"):
-					return true
-				case strings.HasPrefix(origin, "app://localhost"):
-					return true
-				case strings.HasPrefix(origin, "chrome-extension://"):
-					return true
-				case strings.HasPrefix(origin, "moz-extension://"):
-					return true
-				}
-			}
-			for _, p := range allow {
-				if p == "*" {
-					return true
-				}
-				if strings.HasSuffix(p, "/*") {
-					prefix := strings.TrimSuffix(p, "*")
-					if strings.HasPrefix(origin, prefix) {
-						return true
-					}
-					continue
-				}
-				// e.g. chrome-extension://* or moz-extension://* (not matched by /* rule above)
-				if strings.HasSuffix(p, "*") && len(p) > 1 {
-					prefix := strings.TrimSuffix(p, "*")
-					if prefix != "" && strings.HasPrefix(origin, prefix) {
-						return true
-					}
-				}
-				if strings.EqualFold(origin, p) {
-					return true
-				}
-			}
-			return false
-		},
-		AllowHeaders: "Origin, Content-Type, Accept, X-FDM-Pairing-Token, X-FDM-Extension-Id",
+		AllowOriginsFunc: allowOrigin,
+		AllowHeaders:     "Origin, Content-Type, Accept, X-FDM-Pairing-Token, X-FDM-Extension-Id",
 		AllowMethods: strings.Join([]string{
 			fiber.MethodGet, fiber.MethodPost, fiber.MethodPut, fiber.MethodDelete, fiber.MethodOptions,
 		}, ","),
 	}))
+
+	app.Use(api.LocalGuard(allowOrigin, cfg.AppHost))
 
 	api.Register(app, api.Deps{
 		Config:   cfg,
